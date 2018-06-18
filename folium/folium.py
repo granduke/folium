@@ -1,194 +1,77 @@
 # -*- coding: utf-8 -*-
 
 """
-Folium
--------
-
 Make beautiful, interactive maps with Python and Leaflet.js
 
 """
 
 from __future__ import (absolute_import, division, print_function)
 
+import os
+import tempfile
+import time
+
 from branca.colormap import StepColormap
-#from branca.utilities import color_brewer
+from branca.element import CssLink, Element, Figure, JavascriptLink, MacroElement
+from branca.utilities import _parse_size, color_brewer
 
 from folium.features import GeoJson, TopoJson
-from folium.map import FitBounds, LegacyMap
+from folium.map import FitBounds
+from folium.raster_layers import TileLayer
+from folium.utilities import _validate_location
+
+from jinja2 import Environment, PackageLoader, Template
+
+ENV = Environment(loader=PackageLoader('folium', 'templates'))
 
 
-def color_brewer(color_code, n=7):
-    """
-    Generate a colorbrewer color scheme of length 'len', type 'scheme.
-    Live examples can be seen at http://colorbrewer2.org/
+_default_js = [
+    ('leaflet',
+     'https://cdn.jsdelivr.net/npm/leaflet@1.2.0/dist/leaflet.js'),
+    ('jquery',
+     'https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js'),
+    ('bootstrap',
+     'https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js'),
+    ('awesome_markers',
+     'https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js'),  # noqa
+    ]
 
-    """
-    maximum_n = 253
-
-    scheme_info = {'BuGn': 'Sequential',
-                   'BuPu': 'Sequential',
-                   'GnBu': 'Sequential',
-                   'OrRd': 'Sequential',
-                   'PuBu': 'Sequential',
-                   'PuBuGn': 'Sequential',
-                   'PuRd': 'Sequential',
-                   'RdPu': 'Sequential',
-                   'YlGn': 'Sequential',
-                   'YlGnBu': 'Sequential',
-                   'YlOrBr': 'Sequential',
-                   'YlOrRd': 'Sequential',
-                   'BrBg': 'Diverging',
-                   'PiYG': 'Diverging',
-                   'PRGn': 'Diverging',
-                   'PuOr': 'Diverging',
-                   'RdBu': 'Diverging',
-                   'RdGy': 'Diverging',
-                   'RdYlBu': 'Diverging',
-                   'RdYlGn': 'Diverging',
-                   'Spectral': 'Diverging',
-                   'Accent': 'Qualitative',
-                   'Dark2': 'Qualitative',
-                   'Paired': 'Qualitative',
-                   'Pastel1': 'Qualitative',
-                   'Pastel2': 'Qualitative',
-                   'Set1': 'Qualitative',
-                   'Set2': 'Qualitative',
-                   'Set3': 'Qualitative',
-                   'Spectral_reverse': 'Sequential',
-                   }
-
-    schemes = {'BuGn': ['#EDF8FB', '#CCECE6', '#CCECE6',
-                        '#66C2A4', '#41AE76', '#238B45', '#005824'],
-               'BuPu': ['#EDF8FB', '#BFD3E6', '#9EBCDA',
-                        '#8C96C6', '#8C6BB1', '#88419D', '#6E016B'],
-               'GnBu': ['#F0F9E8', '#CCEBC5', '#A8DDB5',
-                        '#7BCCC4', '#4EB3D3', '#2B8CBE', '#08589E'],
-               'OrRd': ['#FEF0D9', '#FDD49E', '#FDBB84',
-                        '#FC8D59', '#EF6548', '#D7301F', '#990000'],
-               'PuBu': ['#F1EEF6', '#D0D1E6', '#A6BDDB',
-                        '#74A9CF', '#3690C0', '#0570B0', '#034E7B'],
-               'PuBuGn': ['#F6EFF7', '#D0D1E6', '#A6BDDB',
-                          '#67A9CF', '#3690C0', '#02818A', '#016450'],
-               'PuRd': ['#F1EEF6', '#D4B9DA', '#C994C7',
-                        '#DF65B0', '#E7298A', '#CE1256', '#91003F'],
-               'RdPu': ['#FEEBE2', '#FCC5C0', '#FA9FB5',
-                        '#F768A1', '#DD3497', '#AE017E', '#7A0177'],
-               'YlGn': ['#FFFFCC', '#D9F0A3', '#ADDD8E',
-                        '#78C679', '#41AB5D', '#238443', '#005A32'],
-               'YlGnBu': ['#FFFFCC', '#C7E9B4', '#7FCDBB',
-                          '#41B6C4', '#1D91C0', '#225EA8', '#0C2C84'],
-               'YlOrBr': ['#FFFFD4', '#FEE391', '#FEC44F',
-                          '#FE9929', '#EC7014', '#CC4C02', '#8C2D04'],
-               'YlOrRd': ['#FFFFB2', '#FED976', '#FEB24C',
-                          '#FD8D3C', '#FC4E2A', '#E31A1C', '#B10026'],
-               'BrBg': ['#8c510a', '#d8b365', '#f6e8c3',
-                        '#c7eae5', '#5ab4ac', '#01665e'],
-               'PiYG': ['#c51b7d', '#e9a3c9', '#fde0ef',
-                        '#e6f5d0', '#a1d76a', '#4d9221'],
-               'PRGn': ['#762a83', '#af8dc3', '#e7d4e8',
-                        '#d9f0d3', '#7fbf7b', '#1b7837'],
-               'PuOr': ['#b35806', '#f1a340', '#fee0b6',
-                        '#d8daeb', '#998ec3', '#542788'],
-               'RdBu': ['#b2182b', '#ef8a62', '#fddbc7',
-                        '#d1e5f0', '#67a9cf', '#2166ac'],
-               'RdGy': ['#b2182b', '#ef8a62', '#fddbc7',
-                        '#e0e0e0', '#999999', '#4d4d4d'],
-               'RdYlBu': ['#d73027', '#fc8d59', '#fee090',
-                          '#e0f3f8', '#91bfdb', '#4575b4'],
-               'RdYlGn': ['#d73027', '#fc8d59', '#fee08b',
-                          '#d9ef8b', '#91cf60', '#1a9850'],
-               'Spectral': ['#d53e4f', '#fc8d59', '#fee08b',
-                            '#e6f598', '#99d594', '#3288bd'],
-               'Accent': ['#7fc97f', '#beaed4', '#fdc086',
-                          '#ffff99', '#386cb0', '#f0027f'],
-               'Dark2': ['#1b9e77', '#d95f02', '#7570b3',
-                         '#e7298a', '#66a61e', '#e6ab02'],
-               'Paired': ['#a6cee3', '#1f78b4', '#b2df8a',
-                          '#33a02c', '#fb9a99', '#e31a1c'],
-               'Pastel1': ['#fbb4ae', '#b3cde3', '#ccebc5',
-                           '#decbe4', '#fed9a6', '#ffffcc'],
-               'Pastel2': ['#b3e2cd', '#fdcdac', '#cbd5e8',
-                           '#f4cae4', '#e6f5c9', '#fff2ae'],
-               'Set1': ['#e41a1c', '#377eb8', '#4daf4a',
-                        '#984ea3', '#ff7f00', '#ffff33'],
-               'Set2': ['#66c2a5', '#fc8d62', '#8da0cb',
-                        '#e78ac3', '#a6d854', '#ffd92f'],
-               'Set3': ['#8dd3c7', '#ffffb3', '#bebada',
-                        '#fb8072', '#80b1d3', '#fdb462'],
-               'Spectral_reverse': ['#9c3ff8', '#3da3e1', '#99d594',
-                                    '#f9f651', '#f9cb51', '#fc8d59', '#d53e4f'],
-               }
-
-    # Raise an error if the n requested is greater than the maximum.
-    if n > maximum_n:
-        raise ValueError("The maximum number of colors in a"
-                         " ColorBrewer sequential color series is 253")
-
-    # Only if n is greater than six do we interpolate values.
-    if n > 6:
-        if color_code not in schemes:
-            color_scheme = None
-        else:
-            # Check to make sure that it is not a qualitative scheme.
-            if scheme_info[color_code] == 'Qualitative':
-                raise ValueError("Expanded color support is not available"
-                                 " for Qualitative schemes, restrict"
-                                 " number of colors to 6")
-            else:
-                color_scheme = linear_gradient(schemes.get(color_code), n)
-    else:
-        color_scheme = schemes.get(color_code, None)
-    return color_scheme
+_default_css = [
+    ('leaflet_css',
+     'https://cdn.jsdelivr.net/npm/leaflet@1.2.0/dist/leaflet.css'),
+    ('bootstrap_css',
+     'https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css'),
+    ('bootstrap_theme_css',
+     'https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css'),  # noqa
+    ('awesome_markers_font_css',
+     'https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css'),  # noqa
+    ('awesome_markers_css',
+     'https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css'),  # noqa
+    ('awesome_rotate_css',
+     'https://rawgit.com/python-visualization/folium/master/folium/templates/leaflet.awesome.rotate.css'),  # noqa
+    ]
 
 
-def linear_gradient(hexList, nColors):
-    """
-    Given a list of hexcode values, will return a list of length
-    nColors where the colors are linearly interpolated between the
-    (r, g, b) tuples that are given.
+class GlobalSwitches(Element):
 
-    Examples
-    --------
-    >>> linear_gradient([(0, 0, 0), (255, 0, 0), (255, 255, 0)], 100)
+    _template = Template(
+        '<script>'
+        'L_PREFER_CANVAS={% if this.prefer_canvas %}true{% else %}false{% endif %}; '
+        'L_NO_TOUCH={% if this.no_touch %}true{% else %}false{% endif %}; '
+        'L_DISABLE_3D={% if this.disable_3d %}true{% else %}false{% endif %};'
+        '</script>'
+    )
 
-    """
-    def _scale(start, finish, length, i):
-        """
-        Return the value correct value of a number that is in between start
-        and finish, for use in a loop of length *length*.
+    def __init__(self, prefer_canvas=False, no_touch=False, disable_3d=False):
+        super(GlobalSwitches, self).__init__()
+        self._name = 'GlobalSwitches'
 
-        """
-        base = 16
-
-        fraction = float(i) / (length - 1)
-        raynge = int(finish, base) - int(start, base)
-        thex = hex(int(int(start, base) + fraction * raynge)).split('x')[-1]
-        if len(thex) != 2:
-            thex = '0' + thex
-        return thex
-
-    allColors = []
-    # Separate (R, G, B) pairs.
-    for start, end in zip(hexList[:-1], hexList[1:]):
-        # Linearly intepolate between pair of hex ###### values and
-        # add to list.
-        nInterpolate = 765
-        for index in range(nInterpolate):
-            r = _scale(start[1:3], end[1:3], nInterpolate, index)
-            g = _scale(start[3:5], end[3:5], nInterpolate, index)
-            b = _scale(start[5:7], end[5:7], nInterpolate, index)
-            allColors.append(''.join(['#', r, g, b]))
-
-    # Pick only nColors colors from the total list.
-    result = []
-    for counter in range(nColors):
-        fraction = float(counter) / (nColors - 1)
-        index = int(fraction * (len(allColors) - 1))
-        result.append(allColors[index])
-    return result
+        self.prefer_canvas = prefer_canvas
+        self.no_touch = no_touch
+        self.disable_3d = disable_3d
 
 
-class Map(LegacyMap):
+class Map(MacroElement):
     """Create a Map with Folium and Leaflet.js
 
     Generate a base map of given width and height with either default
@@ -219,8 +102,13 @@ class Map(LegacyMap):
         pass a custom URL or pass `None` to create a map without tiles.
     API_key: str, default None
         API key for Cloudmade or Mapbox tiles.
+    min_zoom: int, default 0
+        Minimum allowed zoom level for the tile layer that is created.
     max_zoom: int, default 18
-        Maximum zoom depth for the map.
+        Maximum allowed zoom level for the tile layer that is created.
+    max_native_zoom: int, default None
+        The highest zoom level at which the tile server can provide tiles.
+        If provided you can zoom in past this level. Else tiles will turn grey.
     zoom_start: int, default 10
         Initial zoom level for the map.
     attr: string, default None
@@ -260,17 +148,17 @@ class Map(LegacyMap):
 
     Returns
     -------
-    Folium LegacyMap Object
+    Folium Map Object
 
     Examples
     --------
-    >>> map = folium.LegacyMap(location=[45.523, -122.675],
+    >>> map = folium.Map(location=[45.523, -122.675],
     ...                        width=750, height=500)
-    >>> map = folium.LegacyMap(location=[45.523, -122.675],
+    >>> map = folium.Map(location=[45.523, -122.675],
                                tiles='Mapbox Control Room')
-    >>> map = folium.LegacyMap(location=(45.523, -122.675), max_zoom=20,
+    >>> map = folium.Map(location=(45.523, -122.675), max_zoom=20,
                                tiles='Cloudmade', API_key='YourKey')
-    >>> map = folium.LegacyMap(
+    >>> map = folium.Map(
     ...    location=[45.523, -122.675],
     ...    zoom_start=2,
     ...    tiles='http://{s}.tiles.mapbox.com/v3/mapbox.control-room/{z}/{x}/{y}.png',
@@ -278,6 +166,220 @@ class Map(LegacyMap):
     ...)
 
     """
+    _template = Template(u"""
+{% macro header(this, kwargs) %}
+    <style>#{{this.get_name()}} {
+        position: {{this.position}};
+        width: {{this.width[0]}}{{this.width[1]}};
+        height: {{this.height[0]}}{{this.height[1]}};
+        left: {{this.left[0]}}{{this.left[1]}};
+        top: {{this.top[0]}}{{this.top[1]}};
+        }
+    </style>
+{% endmacro %}
+{% macro html(this, kwargs) %}
+    <div class="folium-map" id="{{this.get_name()}}" ></div>
+{% endmacro %}
+
+{% macro script(this, kwargs) %}
+    {% if this.max_bounds %}
+        var southWest = L.latLng({{ this.min_lat }}, {{ this.min_lon }});
+        var northEast = L.latLng({{ this.max_lat }}, {{ this.max_lon }});
+        var bounds = L.latLngBounds(southWest, northEast);
+    {% else %}
+        var bounds = null;
+    {% endif %}
+
+    var {{this.get_name()}} = L.map(
+        '{{this.get_name()}}', {
+        center: [{{this.location[0]}}, {{this.location[1]}}],
+        zoom: {{this.zoom_start}},
+        maxBounds: bounds,
+        layers: [],
+        worldCopyJump: {{this.world_copy_jump.__str__().lower()}},
+        crs: L.CRS.{{this.crs}}
+        });
+{% if this.control_scale %}L.control.scale().addTo({{this.get_name()}});{% endif %}
+    
+    {% if this.objects_to_stay_in_front %}
+    function objects_in_front() {
+        {% for obj in this.objects_to_stay_in_front %}    
+            {{ obj.get_name() }}.bringToFront();
+        {% endfor %}
+    };
+
+{{ this.get_name() }}.on("overlayadd", objects_in_front);
+$(document).ready(objects_in_front);
+{% endif %}
+{% endmacro %}
+""")  # noqa
+
+    def __init__(self, location=None, width='100%', height='100%',
+                 left='0%', top='0%', position='relative',
+                 tiles='OpenStreetMap', API_key=None, max_zoom=18, min_zoom=0,
+                 max_native_zoom=None, zoom_start=10, world_copy_jump=False,
+                 no_wrap=False, attr=None, min_lat=-90, max_lat=90,
+                 min_lon=-180, max_lon=180, max_bounds=False,
+                 detect_retina=False, crs='EPSG3857', control_scale=False,
+                 prefer_canvas=False, no_touch=False, disable_3d=False,
+                 subdomains='abc', png_enabled=False):
+        super(Map, self).__init__()
+        self._name = 'Map'
+        self._env = ENV
+        # Undocumented for now b/c this will be subject to a re-factor soon.
+        self._png_image = None
+        self.png_enabled = png_enabled
+
+        if not location:
+            # If location is not passed we center and zoom out.
+            self.location = [0, 0]
+            self.zoom_start = 1
+        else:
+            self.location = _validate_location(location)
+            self.zoom_start = zoom_start
+
+        Figure().add_child(self)
+
+        # Map Size Parameters.
+        self.width = _parse_size(width)
+        self.height = _parse_size(height)
+        self.left = _parse_size(left)
+        self.top = _parse_size(top)
+        self.position = position
+
+        self.min_lat = min_lat
+        self.max_lat = max_lat
+        self.min_lon = min_lon
+        self.max_lon = max_lon
+        self.max_bounds = max_bounds
+        self.no_wrap = no_wrap
+        self.world_copy_jump = world_copy_jump
+
+        self.crs = crs
+        self.control_scale = control_scale
+
+        self.global_switches = GlobalSwitches(
+            prefer_canvas,
+            no_touch,
+            disable_3d
+        )
+
+        self.objects_to_stay_in_front = []
+
+        if tiles:
+            self.add_tile_layer(
+                tiles=tiles, min_zoom=min_zoom, max_zoom=max_zoom,
+                max_native_zoom=max_native_zoom, no_wrap=no_wrap, attr=attr,
+                API_key=API_key, detect_retina=detect_retina,
+                subdomains=subdomains
+            )
+
+    def _repr_html_(self, **kwargs):
+        """Displays the HTML Map in a Jupyter notebook."""
+        if self._parent is None:
+            self.add_to(Figure())
+            out = self._parent._repr_html_(**kwargs)
+            self._parent = None
+        else:
+            out = self._parent._repr_html_(**kwargs)
+        return out
+
+    def _to_png(self, delay=3):
+        """Export the HTML to byte representation of a PNG image.
+
+        Uses Phantom JS to render the HTML and record a PNG. You may need to
+        adjust the `delay` time keyword argument if maps render without data or tiles.
+
+        Examples
+        --------
+        >>> map._to_png()
+        >>> map._to_png(time=10)  # Wait 10 seconds between render and snapshot.
+        """
+
+        if self._png_image is None:
+            import selenium.webdriver
+
+            with tempfile.NamedTemporaryFile(suffix='.html') as f:
+                fname = f.name
+                self.save(fname, close_file=False)
+                driver = selenium.webdriver.PhantomJS(
+                    service_log_path=os.path.devnull
+                )
+                driver.get('file://{}'.format(fname))
+                driver.maximize_window()
+                # Ignore user map size.
+                driver.execute_script("document.body.style.width = '100%';")  # noqa
+                # We should probably monitor if some element is present,
+                # but this is OK for now.
+                time.sleep(delay)
+                png = driver.get_screenshot_as_png()
+                driver.quit()
+                self._png_image = png
+        return self._png_image
+
+    def _repr_png_(self):
+        """Displays the PNG Map in a Jupyter notebook."""
+        # The notebook calls all _repr_*_ by default.
+        # We don't want that here b/c this one is quite slow.
+        if not self.png_enabled:
+            return None
+        return self._to_png()
+
+    def add_tile_layer(self, tiles='OpenStreetMap', name=None,
+                       API_key=None, max_zoom=18, min_zoom=0,
+                       max_native_zoom=None, attr=None, active=False,
+                       detect_retina=False, no_wrap=False, subdomains='abc',
+                       **kwargs):
+        """
+        Add a tile layer to the map. See TileLayer for options.
+
+        """
+        tile_layer = TileLayer(tiles=tiles, name=name,
+                               min_zoom=min_zoom, max_zoom=max_zoom,
+                               max_native_zoom=max_native_zoom,
+                               attr=attr, API_key=API_key,
+                               detect_retina=detect_retina,
+                               subdomains=subdomains,
+                               no_wrap=no_wrap)
+        self.add_child(tile_layer, name=tile_layer.tile_name)
+
+    def render(self, **kwargs):
+        """Renders the HTML representation of the element."""
+        figure = self.get_root()
+        assert isinstance(figure, Figure), ('You cannot render this Element '
+                                            'if it is not in a Figure.')
+
+        # Set global switches
+        figure.header.add_child(self.global_switches, name='global_switches')
+
+        # Import Javascripts
+        for name, url in _default_js:
+            figure.header.add_child(JavascriptLink(url), name=name)
+
+        # Import Css
+        for name, url in _default_css:
+            figure.header.add_child(CssLink(url), name=name)
+
+        figure.header.add_child(Element(
+            '<style>html, body {'
+            'width: 100%;'
+            'height: 100%;'
+            'margin: 0;'
+            'padding: 0;'
+            '}'
+            '</style>'), name='css_style')
+
+        figure.header.add_child(Element(
+            '<style>#map {'
+            'position:absolute;'
+            'top:0;'
+            'bottom:0;'
+            'right:0;'
+            'left:0;'
+            '}'
+            '</style>'), name='map_style')
+
+        super(Map, self).render(**kwargs)
 
     def fit_bounds(self, bounds, padding_top_left=None,
                    padding_bottom_right=None, padding=None, max_zoom=None):
@@ -347,14 +449,15 @@ class Map(LegacyMap):
         Parameters
         ----------
         geo_data: string/object
-            URL, file path, or data (json, dict, geopandas, etc) to your GeoJSON geometries
+            URL, file path, or data (json, dict, geopandas, etc) to your GeoJSON
+            geometries
         data: Pandas DataFrame or Series, default None
             Data to bind to the GeoJSON.
         columns: dict or tuple, default None
             If the data is a Pandas DataFrame, the columns of data to be bound.
             Must pass column 1 as the key, and column 2 the values.
         key_on: string, default None
-            Variable in the GeoJSON file to bind the data to. Must always
+            Variable in the `geo_data` GeoJSON file to bind the data to. Must
             start with 'feature' and be in JavaScript objection notation.
             Ex: 'feature.id' or 'feature.properties.statename'.
         threshold_scale: list, default None
@@ -411,8 +514,9 @@ class Map(LegacyMap):
         ...              highlight=True)
 
         """
-        if threshold_scale and len(threshold_scale) > 6:
-            raise ValueError
+        if threshold_scale is not None and len(threshold_scale) > 6:
+            raise ValueError('The length of threshold_scale is {}, but it may '
+                             'not be longer than 6.'.format(len(threshold_scale)))  # noqa
         if data is not None and not color_brewer(fill_color):
             raise ValueError('Please pass a valid color brewer code to '
                              'fill_local. See docstring for valid codes.')
@@ -430,7 +534,7 @@ class Map(LegacyMap):
             color_data = None
 
         # Compute color_domain
-        if threshold_scale:
+        if threshold_scale is not None:
             color_domain = list(threshold_scale)
         elif color_data:
             # To avoid explicit pandas dependency ; changed default behavior.
@@ -449,7 +553,7 @@ class Map(LegacyMap):
         else:
             color_domain = None
 
-        if color_domain and key_on:
+        if color_domain and key_on is not None:
             key_on = key_on[8:] if key_on.startswith('feature.') else key_on
             color_range = color_brewer(fill_color, n=len(color_domain))
 
@@ -459,23 +563,25 @@ class Map(LegacyMap):
                                    '.'.join(key.split('.')[1:])))
 
             def color_scale_fun(x):
-                return color_range[len(
-                    [u for u in color_domain if
-                     get_by_key(x, key_on) in color_data and
-                     u <= color_data[get_by_key(x, key_on)]])]
-
+                idx = len(
+                    [
+                        u for u in color_domain if
+                        get_by_key(x, key_on) in color_data and
+                        u <= color_data[get_by_key(x, key_on)]
+                    ]
+                )
+                return color_range[idx-1]
         else:
             def color_scale_fun(x):
                 return fill_color
 
         def style_function(x):
-            color = color_scale_fun(x) #added
             return {
                 'weight': line_weight,
                 'opacity': line_opacity,
-                'color': color,             #changed from default color
+                'color': line_color,
                 'fillOpacity': fill_opacity,
-                'fillColor': color
+                'fillColor': color_scale_fun(x)
             }
 
         def highlight_function(x):
@@ -512,3 +618,17 @@ class Map(LegacyMap):
                 caption=legend_name,
                 )
             self.add_child(color_scale)
+
+    def keep_in_front(self, *args):
+        """Pass one or multiples object that must stay in front.
+
+        The ordering matters, the last one is put on top.
+
+        Parameters
+        ----------
+        *args :
+            Variable length argument list. Any folium object that counts as an
+            overlay. For example FeatureGroup or a vector object such as Marker.
+        """
+        for obj in args:
+            self.objects_to_stay_in_front.append(obj)
